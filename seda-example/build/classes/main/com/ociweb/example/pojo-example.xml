@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camel="http://camel.apache.org/schema/spring"
+
+	xsi:schemaLocation="
+	http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-2.5.xsd
+	http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd">
+	<camel:camelContext id="context">
+		<camel:proxy id="warehouseProxy" serviceUrl="warehouse"
+			serviceInterface="com.ociweb.example.domain.Warehouse" />
+		<camel:endpoint id="warehouse" uri="direct:warehouse"/>
+		<camel:route>
+			<camel:from uri="warehouse"/>
+			<camel:to uri="bean:warehouseImpl"/>
+		</camel:route>
+	</camel:camelContext>
+
+	<!--  Exposes the above bean as via the pojo:say endpoint -->
+
+	<bean id="warehouseImpl" class="com.ociweb.example.domain.SprocketWarehouse" />
+
+	<bean id="orderSite" class="com.ociweb.example.domain.OrderSite">
+		<property name="warehouse" ref="warehouseProxy"></property>
+	</bean>
+</beans>
