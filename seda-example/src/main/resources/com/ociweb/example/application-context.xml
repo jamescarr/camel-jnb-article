@@ -8,7 +8,7 @@
 	<camel:camelContext id="context">
 		<camel:proxy id="warehouseProxy" serviceUrl="warehouse"
 			serviceInterface="com.ociweb.example.domain.Warehouse" />
-		<camel:endpoint id="warehouse" uri="direct:warehouse"/>
+		<camel:endpoint id="warehouse" uri="seda:warehouse?concurrentConsumers=4&amp;waitForTaskToComplete=Never"/>
 		<camel:route>
 			<camel:from uri="warehouse"/>
 			<camel:to uri="bean:warehouseImpl"/>

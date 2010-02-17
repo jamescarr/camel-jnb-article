@@ -26,7 +26,7 @@ task createDirectories <<{
 }
 
 task run(dependsOn: build) <<{  
-        ant.java(classname: 'com.ociweb.example.PojoExampleWithSpring', fork: false,  
+        ant.java(classname: 'com.ociweb.example.ExampleDriver', fork: false,  
         classpath: "${sourceSets.main.runtimeClasspath.asPath}")  
 }  
 
