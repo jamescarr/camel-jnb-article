@@ -1,3 +1,11 @@
+dependsOnChildren()
+
+allprojects{
+	task createDirectories <<{
+	        convention.sourceSets.all*.java.srcDirs*.each { it.mkdirs() }
+	        convention.sourceSets.all*.resources.srcDirs*.each { it.mkdirs() }
+	}	
+}
 subprojects{
 	usePlugin 'java'
 	usePlugin 'eclipse'
@@ -21,9 +29,5 @@ subprojects{
 	        testCompile "org.mockito:mockito-all:1.8.2"
 	}
 
-	task createDirectories <<{
-	        convention.sourceSets.all*.java.srcDirs*.each { it.mkdirs() }
-	        convention.sourceSets.all*.resources.srcDirs*.each { it.mkdirs() }
-	}	
 
 }

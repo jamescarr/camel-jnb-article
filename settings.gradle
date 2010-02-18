@@ -1,1 +1,1 @@
-include "pojo-example", "seda-example"
+include "pojo-example", "seda-example", "cxf-example"
