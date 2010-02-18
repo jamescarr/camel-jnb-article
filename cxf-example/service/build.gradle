@@ -1,0 +1,11 @@
+usePlugin 'java'
+dependencies {
+	configurations.compile.transitive=true
+	compile project(':shared')
+	compile 'org.apache.cxf:cxf-bundle:2.2.5'
+}
+task run(dependsOn: build) <<{
+                ant.java(classname: 'com.ociweb.example.Publisher', fork: false,
+                classpath: "${sourceSets.main.runtimeClasspath.asPath}")
+}
+

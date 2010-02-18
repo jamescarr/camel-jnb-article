@@ -1,0 +1,11 @@
+dependencies{	
+	compile project(':shared')
+	compile "org.apache.cxf:cxf-bundle-minimal:2.2.5"
+	compile "org.apache.camel:camel-cxf:2.1.0"
+}
+
+        task run(dependsOn: build) <<{
+                ant.java(classname: 'com.ociweb.example.ExampleDriver', fork: false,
+                classpath: "${sourceSets.main.runtimeClasspath.asPath}")
+        }
+
