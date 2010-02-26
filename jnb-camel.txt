@@ -1,0 +1,214 @@
+Hiding The Middleware from Your Domain Code With Camel
+by
+James Carr
+OCI
+
+Introduction
+A very important aspect of writing software is trying to write a domain that is as clean is possible. That is, we want our domain logic to only deal in terms of the domain rather than dealing in fancy enterprise terms like SOAP, JMS, and even REST. By keeping the middleware code hidden from the application code the application is more flexible and easier to change... and Apache Camel helps achieve that without having to resort to using a full blown ESB. Using Camel, I'll show how you can take two objects that collaborate in the same thread, move them to separate threads, and even separate them altogether behind web services or JMS and continue to work with the same API and not even care about the underlying transport. 
+
+The Domain
+For the sake of simplicity the domain has puposefully been kept small, limited to just three objects to represent an system that takes an order of some sort (let's call it an OrderSite) which performs some basic business logic and sends a ShippingOrder to a Warehouse.  
+
+[OrderSite]
+public class OrderSite {
+	private Warehouse warehouse;
+
+	public void process(Order order) {
+		ShippingOrder shippingOrder = new ShippingOrder().forPurchase(order);
+
+		shippingOrder.shipsOn(calculateShippingDate(shippingOrder));
+
+		warehouse.shipProduct(shippingOrder);
+	}
+
+	private DateMidnight calculateShippingDate(ShippingOrder shippingOrder) {
+		return shippingOrder.getQuantity() < 10 ? oneDayFromNow()
+				: threeDaysFromNow();
+	}
+
+	private DateMidnight oneDayFromNow() {
+		return new DateTime().plusDays(1).toDateMidnight();
+	}
+
+	private DateMidnight threeDaysFromNow() {
+		return new DateTime().plusDays(3).toDateMidnight();
+	}
+
+	public void setWarehouse(Warehouse warehouse) {
+		this.warehouse = warehouse;
+
+	}
+}
+
+[Warehouse]
+public interface Warehouse {
+	void shipProduct(ShippingOrder order);
+}
+
+[ShippingOrder]
+import org.joda.time.DateMidnight;
+
+public class ShippingOrder {
+
+	private int quantity;
+	private String product;
+	private DateMidnight date;
+
+	public Integer getQuantity() {
+		return quantity;
+	}
+
+	public String getProduct() {
+		return product;
+	}
+
+	public ShippingOrder forPurchase(Order order) {
+		this.quantity= order.getQuantity();
+		this.product = order.getProductName();
+		return this;
+	}
+
+	public DateMidnight getExpectedShipDate() {
+		return date;
+	}
+
+	public void shipsOn(DateMidnight date) {
+		this.date = date;		
+	}
+}
+
+[Order]
+public class Order {
+	private final int quantity;
+	private final String productName;
+
+	public Order(int quantity, String productName) {
+		this.quantity = quantity;
+		this.productName = productName;
+	}
+
+	public int getQuantity() {
+		return quantity;
+	}
+
+	public String getProductName() {
+		return productName;
+	}
+}
+
+We'll also include an implementation of Warehouse named SprocketWarehouse that simply prints the order received and puts the thread to sleep for 1 second to simulate a time consuming process.
+
+[SprocketWarehouse]
+public class SprocketWarehouse implements Warehouse {
+	private static final String MESSAGE = "Recieved Order for %d %s that will ship on %s.%n";
+	public void shipProduct(ShippingOrder order) {
+		System.out.printf(MESSAGE,order.getQuantity(),order.getProduct(), order.getExpectedShipDate().toString("MM/dd/yyyy"));
+		try {
+			Thread.sleep(1000);
+		} catch (InterruptedException e) {}
+	}
+}
+These objects will remain largely unchanged throughout the article... the essence is to illustrate keeping your domain code free from any middleware specific transports. 
+
+Setting Up Camel
+Luckily camel comes with a very rich set of configuration options ranging from using spring, guice, or just use plain old java objects to configure itself. But before jumping in, let's first review some of the terminology I'll use:
+
+Camel Context - If you're familiar with spring, you can picture the camel context as being similar to the application context... it's the heart of camel and is what you'll use to manage rules, routes, and endpoints that you'll register. You can also have multiple camel context instances within the same VM. 
+
+Endpoint - An endpoint is essentially a true to form implementation of MessageEndpoint from the book Enterprise Integration Patterns. In camel, an endpoint represents a destination (e.g. a JMS queue, a file, a web service, even an irc channel). Endpoints are defined in camel using Components that work as factories for endpoints. 
+ 
+Route - A Route defines a specialized set of routing rules to route a message within the camel context. Camel allows users to define routes a number of ways, using a java DSL, an xml DSL, and even a highly readable scala DSL.
+
+With all this in mind, let's set up a spring based configuration that configures a camel context to route a message from the OrderSite to the SprocketFactory using the direct component, which directly calls the object at the end of the endpoint. 
+
+[application-context.xml]
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+    xmlns:camel="http://camel.apache.org/schema/spring"
+	xsi:schemaLocation="
+	http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-2.5.xsd
+	http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd">
+	(1)<camel:camelContext id="context"> 
+		(2)<camel:proxy id="warehouseProxy" serviceUrl="warehouse"
+			serviceInterface="com.ociweb.example.domain.Warehouse" />
+		(3)<camel:endpoint id="warehouse" uri="direct:warehouse"/>
+        (4)     <camel:route>
+                        <camel:from ref="warehouse"></camel:from>
+                        <camel:to uri="bean:warehouseImpl"></camel:to>
+                </camel:route>
+	</camel:camelContext>
+ 
+    (5)
+	<bean id="warehouseImpl" class="com.ociweb.example.domain.SprocketWarehouse" />
+ 
+	(6) <bean id="orderSite" class="com.ociweb.example.domain.OrderSite">
+		<property name="warehouse" ref="warehouseProxy"></property>
+	</bean>
+</beans>
+
+This can look a littile complicated with spring.xml, but it gets better. (1) Is the camelContext, which is where we'll store our routes, endpoints, and proxies. (2) Is a camel proxy bean, which uses Spring Remoting under the hood to create a dynamic proxy for the Warehouse inteface that we can inject into OrderSite to treat it like any other java object. serviceUrl is a reference to the endpoint for this proxy, which in this case we name "warehouse", which references the id of the endpoint we've defined. (3) Specifies an endpoint element to specify a uri for the endpoint, set to "direct:warehouse". This means that any messages received will call a direct invocation on whatever consumers are attached to the endpoint.  (4) Specifies a route that says from that endpoint we should call whatever is defined by to, which points to the bean definition for warehouse (5). And in (6) we do the usual chore of injecting the proxy bean on OrderSite. 
+
+One interesting point to discuss is how the bean component works. You might be wondering how it knows which method to call... in this case SprocketWarehouse contained only one method, so camel defaulted to calling that method. When there's multiple methods, it will try to call which ever method matches the type. Alternatively, you can also specify which method you want invoked by passing a method parameter to it, for example: bean:sprocketWarehouse?method=shipProduct.
+
+Now to see all this work, let's write a simple class to load up the context, lookup the orderSite and submit a few orders:
+
+[POJO Example With Spring]
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+
+import com.ociweb.example.domain.Order;
+import com.ociweb.example.domain.OrderSite;
+
+public class PojoExampleWithSpring {
+        public static void main(String... args){
+                ClassPathXmlApplicationContext ctx = new ClassPathXmlApplicationContext("classpath:com/ociweb/example/pojo-example.xml");
+                OrderSite site = (OrderSite) ctx.getBean("orderSite");
+
+                site.process(new Order(9, "Sprockets"));
+                site.process(new Order(10, "Sprockets"));
+                site.process(new Order(13, "Sprockets"));
+                site.process(new Order(225, "Sprockets"));
+        }
+}
+
+Now if we run this we'll get what we'd expect... each shipping order printed out as they're received, in the order they were sent. Nothing fancy, and at this point you could even argue we overcomplicated having one object simply call another. [http://github.com/jamescarr/camel-jnb-article/tree/pojo-example]
+
+
+Placing The Dependency In Another Thread
+We've decided it'd be nice if we could multi-thread our order process... rather than having to wait for each order to be processed sequentially, we instead want each Warehouse to handle the order in it's own thread. Thankfully, this is an easy task to move towards using our existing setup, we just need to modify our camelContext a bit:
+
+
+        <camel:camelContext id="context">
+                <camel:proxy id="warehouseProxy" serviceUrl="warehouse"
+                        serviceInterface="com.ociweb.example.domain.Warehouse" />
+                <camel:endpoint id="warehouse" uri="seda:warehouse?concurrentConsumers=4&amp;waitForTaskToComplete=Never"/>
+                <camel:route>
+                        <camel:from ref="warehouse"></camel:from>
+                        <camel:to uri="bean:warehouseImpl"></camel:to>
+                </camel:route>
+        </camel:camelContext>
+All that is done here is we change the uri to use the seda component which provides us with better asynchronous invocations as well as concurrency. We can pass options to the component in the form of uri parameters, setting concurrentConsumers to 4 and waitForTaskToComplete to Never, meaning it will caall the method and just keep going. Re-running the example should now give us a result of all four warehouses printing their messages simultaneously and out of order as result of them all executing at once. 
+
+That's pretty exciting... we just made our app multi-threaded and we didn't have to write one line of new code or mix a bunch threading logic into our domain. We can use the uri format of the component to configure it as we wish, limiting or expanding the maximum number of concurrent consumers we want executing at once as well as many other options. [http://github.com/jamescarr/camel-jnb-article/tree/seda-concurrent-consumers]
+
+
+Hiding Them Behind JMS
+Now let's get a little bolder... how about we completely separate the OrderSite and the SprocketWarehouse altogether by placing the sprocket warehouse in a separate application, using JMS (specifically ActiveMQ in this example) as the middleman for them to communicate between each other. Just create a separate project, offload SprocketWarehouse in there, and place the Warehouse interface in a common project for both to use. We'll need to setup camel in both, with the following context definitions:
+ 
+
+
+
+Building Routes Using the Other DSL
+SO far I've illustrated building routes using spring xml. Alternatively, you can also build routes using plain Java or even Scala, which can be nicer to read (and less pointy!). Taking our previous example, we can do the same by creating a new class that extends RouteBuilder and implements the confgiure() method as follows:
+
+public void configure(){
+    from('warehouse').to('bean:warehouseImpl');
+}
+
+Or in scala:
+
+'warehouse' --> 'bean:warehouseImpl'
+Summary
+
+
+Further Reading

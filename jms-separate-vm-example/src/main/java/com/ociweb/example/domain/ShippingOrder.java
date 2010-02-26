@@ -5,7 +5,6 @@ import org.joda.time.DateMidnight;
 import java.io.Serializable;
 
 public class ShippingOrder implements Serializable{
-
 	private int quantity;
 	private String product;
 	private DateMidnight date;

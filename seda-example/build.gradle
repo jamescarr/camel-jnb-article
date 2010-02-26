@@ -1,5 +1,5 @@
-        task run(dependsOn: build) <<{
+task run(dependsOn: build) <<{
                 ant.java(classname: 'com.ociweb.example.ExampleDriver', fork: false,
                 classpath: "${sourceSets.main.runtimeClasspath.asPath}")
-        }
+}
 

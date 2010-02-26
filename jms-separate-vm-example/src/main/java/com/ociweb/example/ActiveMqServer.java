@@ -9,6 +9,8 @@ public class ActiveMqServer{
         broker.setUseJmx(false);
 		broker.addConnector("tcp://localhost:61616");
 		broker.start();
-        while(true);
+        
+        System.out.println("ActiveMQ started... press enter to exit");
+        System.in.read();
 	}
 }
