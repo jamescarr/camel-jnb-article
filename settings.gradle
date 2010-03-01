@@ -1,1 +1,1 @@
-include "pojo-example", "seda-example", "jms-separate-vm-example"
+include "pojo-example", "seda-example", "routing-example"
