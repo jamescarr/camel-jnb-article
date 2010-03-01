@@ -1,0 +1,9 @@
+task run(dependsOn: build) <<{
+                ant.java(classname: 'com.ociweb.example.ExampleDriver', fork: false,
+                classpath: "${sourceSets.main.runtimeClasspath.asPath}")
+}
+
+
+dependencies{
+     compile "org.apache.camel:camel-script:2.1.0"
+}   
