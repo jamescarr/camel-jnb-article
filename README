@@ -8,14 +8,9 @@ From the pojo-example directory type 'gradle -q run'
 
 seda-example
 ------------
-gradle -q run
+From the seda-example directory type 'gradle -q run'
 
-jms-separate-jvm-example
-------------------------
-you'll need to run these from separate consoles as they lock the console and you'll need to ctrl+c to stop them. 
-(1) to startup the activemq broker, gradle runActiveMq
-(2) to startup the warehouse order listener, gradle -q runWarehouse
-(3) finally, to run the example, gradle -q runExample 
-The results will appear in the console output for the warehouse
-
+routing-example
+---------------
+From the routing-example directory type 'gradle -q run'
 
